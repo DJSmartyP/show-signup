@@ -43,3 +43,9 @@ yarn-error.log*
 
 # OS metadata
 .DS_Store
+
+# Firebase emulator data and logs
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*

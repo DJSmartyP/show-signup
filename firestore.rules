@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function showPath(id) { return /databases/$(database)/documents/ppecShowSignup/$(id); }
+    function slotPath(minute) { return /databases/$(database)/documents/ppecShowSlots/$(string(minute)); }
+    function validShow(d) {
+      return d.keys().hasAll(['title','premise','owner','ownerUid','start','duration'])
+        && d.keys().hasOnly(['title','premise','owner','ownerUid','start','duration'])
+        && d.title is string && d.title.size() > 0 && d.title.size() <= 100
+        && d.premise is string && d.premise.size() > 0 && d.premise.size() <= 1000
+        && d.owner is string && d.owner.size() > 0 && d.owner.size() <= 80
+        && d.ownerUid == request.auth.uid
+        && d.start is int && d.start >= 540 && d.start % 30 == 0
+        && d.duration in [30,60] && d.start + d.duration <= 1440;
+    }
+    match /ppecShowSignup/{id} {
+      allow read: if true;
+      allow create: if signedIn() && validShow(request.resource.data)
+        && getAfter(slotPath(request.resource.data.start)).data.showId == id
+        && (request.resource.data.duration == 30
+          || getAfter(slotPath(request.resource.data.start + 30)).data.showId == id);
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid
+        && !existsAfter(slotPath(resource.data.start))
+        && (resource.data.duration == 30 || !existsAfter(slotPath(resource.data.start + 30)));
+    }
+    match /ppecShowSlots/{slotId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['showId','minute'])
+        && request.resource.data.keys().hasOnly(['showId','minute'])
+        && request.resource.data.showId is string
+        && request.resource.data.minute is int
+        && slotId == string(request.resource.data.minute)
+        && getAfter(showPath(request.resource.data.showId)).data.ownerUid == request.auth.uid
+        && (request.resource.data.minute == getAfter(showPath(request.resource.data.showId)).data.start
+          || (getAfter(showPath(request.resource.data.showId)).data.duration == 60
+            && request.resource.data.minute == getAfter(showPath(request.resource.data.showId)).data.start + 30));
+      allow update: if false;
+      allow delete: if signedIn()
+        && get(showPath(resource.data.showId)).data.ownerUid == request.auth.uid
+        && !existsAfter(showPath(resource.data.showId));
+    }
+  }
+}

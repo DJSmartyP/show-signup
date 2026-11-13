@@ -1,47 +1,52 @@
 # Show Signup — PPEC
 
-A compact event sign-up tool for the Phantom Peak Explorers Club, from **09:00 to midnight (UK time)**.
+Compact 09:00–midnight event sign-ups, hosted on **GitHub Pages** with **Firebase Firestore** for shared bookings.
 
-- PPEC logo with purple, gold and cream branding.
-- Expandable **9am–2pm**, **2pm–7pm** and **7pm–midnight** sections.
-- Available and taken half-hour slots, with counts in each section.
-- Contributors enter their name/handle, show name and premise, then select 30 or 60 minutes.
-- Everyone sees the shared schedule; it refreshes every 15 seconds.
-- Atomic database writes prevent overlapping bookings.
-- Contributors can withdraw bookings from the browser they used to submit.
+- PPEC logo, purple, gold and cream styling.
+- Three expandable sections: 9am–2pm, 2pm–7pm, 7pm–midnight.
+- Available/taken slots with counts, show title, premise and contributor.
+- 30- or 60-minute bookings, with transactions and rules preventing clashes.
+- Live schedule updates across browsers.
+- Anonymous Firebase sign-in happens when booking; no contributor registration form.
+- Contributors can withdraw their own shows from the same browser.
 
-## Deployment status
+## Firebase setup (required before real bookings)
 
-The source is uploaded here. **A live public event site has not been deployed.** This app uses a Cloudflare Worker and D1 database. GitHub Pages alone cannot execute the database API. Hosting and the shared database must be connected before collecting real sign-ups. No event date was supplied; the schedule represents one event day.
+1. Choose/create a Firebase project and register a Web app.
+2. Enable **Authentication → Sign-in method → Anonymous**.
+3. Create a **Cloud Firestore Standard edition** database in production mode. Select the region before creating it.
+4. Publish `firestore.rules` in the database Rules tab, or run `firebase deploy --only firestore:rules --project YOUR_PROJECT_ID` with the Firebase CLI.
+5. Replace `null` in `public/firebase-config.js` with the Web app's public `firebaseConfig` object. Never put service-account credentials in this file.
+6. Add `djsmartyp.github.io` under Authentication authorised domains. If the API key has HTTP referrer restrictions, allow `https://djsmartyp.github.io/*`.
+
+The rules apply only to `ppecShowSignup` and `ppecShowSlots`; they do not grant access to other collections. On a project already used by other apps, merge these collection rules into the existing ruleset instead of replacing its existing rules.
+
+Firebase configuration has **not yet been supplied**. The site intentionally disables sign-ups and hides apparent availability until it can load the shared schedule.
+
+## GitHub Pages
+
+Set repository **Settings → Pages → Source → GitHub Actions**. The workflow in `.github/workflows/pages.yml` builds and publishes the `dist` folder on pushes to `main`.
+
+Expected URL after a successful deployment: `https://djsmartyp.github.io/show-signup/`.
 
 ## Development
 
-Requires Node 22.13+ and npm.
-
 ```sh
 npm ci
-npm run build
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_magenta_carnage.sql
 npm run dev
+npm run build
 ```
 
-Run the migration once per local database, then use the URL printed by the development server. Local D1 data is separate from production.
+Node 22.13+ is required. This version is a static Vite/React app; no Worker or D1 service is needed.
 
-## Hosting
+## Files
 
-The logical database binding is `DB`. Provision a production Cloudflare D1 database, apply the SQL migration in `drizzle/`, and deploy the built Worker with that database binding. The Vite setup uses a placeholder database identifier for local development; replace it with the host-provided production binding before deploying. `.openai/hosting.json` intentionally contains no staging project identity.
+- `src/App.tsx`: schedule and form.
+- `src/firebase.ts`: realtime reads, anonymous identity and atomic bookings.
+- `src/style.css`: PPEC branding.
+- `public/firebase-config.js`: public Firebase Web app configuration.
+- `firestore.rules`: ownership, validation and consistent slot reservation rules.
 
-## Main files
+## Notes
 
-- `app/page.tsx` — schedule, sections and sign-up form.
-- `app/globals.css` — compact PPEC styling.
-- `app/api/shows/route.ts` — shared schedule API and booking validation.
-- `db/schema.ts` and `drizzle/` — database schema and migration.
-
-## Verification
-
-TypeScript checks and production build passed. In the local browser, a 60-minute booking persisted after reload, occupied both half-hours, disappeared from available start times and was successfully withdrawn.
-
-## Booking ownership
-
-The withdrawal token is stored locally on the contributor's browser; clearing browser storage loses that browser's withdrawal ability. The schedule's names and show details are public to site visitors.
+A 60-minute show occupies both half-hour rows, including when it crosses a section boundary. The time ranges are for a single event day; no event date was supplied. Anonymous ownership persists through Firebase's browser session storage; clearing site data removes the ability to withdraw earlier bookings. Public schedule records include the contributor's chosen name/handle and show details.
